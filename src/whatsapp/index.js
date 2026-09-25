@@ -77,13 +77,34 @@ async function iniciarConexao() {
     return socket;
 }
 
+// Descobre o JID de verdade pra um numero, perguntando ao proprio WhatsApp
+// em vez de montar o endereco "no chute" a partir do numero digitado.
+// Isso resolve o problema classico do "9" extra em numeros brasileiros:
+// o Baileys as vezes aceita o envio pra um JID que nao existe de verdade
+// (loga sucesso) mas a mensagem nunca chega. Consultando o onWhatsApp()
+// primeiro, so seguimos com o JID que o WhatsApp confirmou que existe.
+async function resolverJid(telefoneComDDI) {
+    const resultado = await socketAtual.onWhatsApp(telefoneComDDI);
+
+    if (!resultado || resultado.length === 0 || !resultado[0]?.exists) {
+        throw new Error(
+            `Numero ${telefoneComDDI} nao tem WhatsApp valido (onWhatsApp nao confirmou a existencia).`
+        );
+    }
+
+    // resultado[0].jid ja vem no formato correto que o WhatsApp usa de fato
+    // pra essa conta (com ou sem o "9", dependendo do caso).
+    return resultado[0].jid;
+}
+
 // Funcao "crua" de envio - so e chamada pela fila (fila.js), nunca direto,
 // pra garantir que sempre passa pelo throttle/retry.
 async function enviarMensagemDireta(telefoneComDDI, texto) {
     if (!socketAtual || !conectado) {
         throw new Error('WhatsApp nao esta conectado no momento.');
     }
-    const jid = `${telefoneComDDI}@s.whatsapp.net`;
+
+    const jid = await resolverJid(telefoneComDDI);
     await socketAtual.sendMessage(jid, { text: texto });
 }
 
