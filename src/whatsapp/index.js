@@ -8,6 +8,7 @@ import {
     default as makeWASocket,
     useMultiFileAuthState,
     makeCacheableSignalKeyStore,
+    fetchLatestBaileysVersion,
     DisconnectReason,
 } from '@whiskeysockets/baileys';
 
@@ -48,7 +49,28 @@ async function iniciarConexao() {
 
     const { state, saveCreds } = await useMultiFileAuthState(PASTA_SESSAO);
 
+    // ✅ NOVO: busca a versao atual do protocolo do WhatsApp Web em vez de
+    // usar a versao fixa que vem embutida na biblioteca. O WhatsApp muda
+    // esse numero de vez em quando, e quando isso acontece o Baileys leva
+    // um tempo pra lancar uma atualizacao com o numero novo - enquanto
+    // isso, quem usa a versao antiga embutida toma "405 Method Not
+    // Allowed" na hora de conectar (foi exatamente isso que aconteceu
+    // aqui). Buscando a versao mais recente toda vez que o bot sobe, a
+    // gente para de depender de quando a lib em si e atualizada.
+    let versaoProtocolo;
+    try {
+        const { version } = await fetchLatestBaileysVersion();
+        versaoProtocolo = version;
+        console.log(`[WHATSAPP] Versao do protocolo WhatsApp Web em uso: ${version.join('.')}`);
+    } catch (erro) {
+        console.warn(
+            '[WHATSAPP] Nao foi possivel buscar a versao mais recente do protocolo ' +
+            `(${erro.message}) - usando a versao padrao embutida na biblioteca.`
+        );
+    }
+
     const socket = makeWASocket({
+        version: versaoProtocolo, // undefined aqui = Baileys usa o padrao dele mesmo, sem quebrar nada
         auth: {
             creds: state.creds,
             // ✅ NOVO: wrapper recomendado oficialmente a partir do Baileys 7
