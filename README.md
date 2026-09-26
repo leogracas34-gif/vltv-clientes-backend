@@ -113,6 +113,52 @@ pm2 restart vltv-whatsapp  # reiniciar depois de um git pull
 
 ---
 
+## ⚠️ Migração pro Baileys 7 (ESM) — leia antes de fazer deploy dessa versão
+
+Essa versão passou por duas mudanças importantes em relação à anterior:
+
+1. **O projeto virou ESM** (`"type": "module"` no `package.json`, `import` em vez de
+   `require` em todos os arquivos). Exige **Node 20 ou mais novo** — confirme com `node -v`
+   antes de continuar.
+2. **Baileys atualizado pra `7.0.0-rc14`** (pinado, sem `^`), pra corrigir os erros de
+   `Bad MAC` / `Failed to decrypt message` e o problema do ID oculto (`@lid`) que
+   apareciam constantemente na versão anterior (`6.7.9`/`6.7.22`).
+
+**Importante: a migração de sessão do Baileys 7 não tem volta.** Assim que essa versão
+abrir a pasta `auth_info_baileys/` pela primeira vez, ela reescreve o formato interno das
+chaves — não dá mais pra voltar pra uma versão 6.x apontando pra essa mesma pasta depois
+disso. O próprio código já faz um backup automático (`auth_info_baileys_backup_pre_v7/`)
+na primeira vez que sobe, mas mesmo assim:
+
+```bash
+cd ~/vltv-clientes-backend
+git pull
+node -v                     # confirme 20.x ou mais novo
+cp -r auth_info_baileys auth_info_baileys_backup_manual   # backup extra, por garantia
+npm install                 # vai baixar o Baileys 7.0.0-rc14 novo
+pm2 restart vltv-whatsapp
+pm2 logs vltv-whatsapp
+```
+
+Como é a mesma sessão (mesmo `auth_info_baileys/`), **não precisa escanear QR code de
+novo** — só reinicia. Se por acaso pedir QR (ex: sessão tinha caído antes do restart),
+ele chega no Telegram normalmente.
+
+**O que esperar de diferente nos logs:** os erros de `Bad MAC`/`Failed to decrypt` que
+apareciam antes devem parar (ou ficar bem mais raros) — essa era exatamente a classe de
+bug que o Baileys 7 corrigiu. Depois do restart, teste de novo com:
+
+```bash
+curl -X POST https://clientes.vltvplay.tech/enviar \
+  -H "x-api-key: SUA_CHAVE_DO_ENV" \
+  -H "Content-Type: application/json" \
+  -d '{"telefone":"5531999998888","mensagem":"teste pos-migracao"}'
+```
+
+E confirma que a mensagem chega de verdade no aparelho (não só "entregue" no log).
+
+---
+
 ## Endpoint da API
 
 **`POST /enviar`** — exige o header `x-api-key: SUA_CHAVE_DO_ENV`

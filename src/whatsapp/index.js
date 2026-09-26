@@ -1,28 +1,65 @@
-const path = require('path');
-const QRCode = require('qrcode');
-const pino = require('pino');
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import QRCode from 'qrcode';
+import pino from 'pino';
 
-const {
-    default: makeWASocket,
+import {
+    default as makeWASocket,
     useMultiFileAuthState,
+    makeCacheableSignalKeyStore,
     DisconnectReason,
-} = require('@whiskeysockets/baileys');
+} from '@whiskeysockets/baileys';
 
-const { enviarMensagemAdmin, enviarFotoAdmin } = require('../telegram');
-const fila = require('./fila');
+import { enviarMensagemAdmin, enviarFotoAdmin } from '../telegram/index.js';
+import fila from './fila.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PASTA_SESSAO = path.join(__dirname, '..', '..', 'auth_info_baileys');
+
+// ✅ NOVO (migracao pro Baileys 7): a atualizacao pro Baileys 7 migra as
+// sessoes salvas pro novo formato (LID) de forma IRREVERSIVEL - uma vez
+// que o Baileys 7 abre e regrava a pasta de sessao, nao da mais pra voltar
+// pra uma versao 6.x apontando pra essa mesma pasta. Por seguranca, antes
+// de abrir a conexao pela primeira vez nessa versao, fazemos UMA copia de
+// backup da pasta como ela estava antes da migracao (so na primeira vez -
+// nunca sobrescreve um backup que ja existe).
+const PASTA_BACKUP_PRE_V7 = path.join(__dirname, '..', '..', 'auth_info_baileys_backup_pre_v7');
+
+function fazerBackupSessaoSeNecessario() {
+    try {
+        if (fs.existsSync(PASTA_SESSAO) && !fs.existsSync(PASTA_BACKUP_PRE_V7)) {
+            fs.cpSync(PASTA_SESSAO, PASTA_BACKUP_PRE_V7, { recursive: true });
+            console.log(
+                `[WHATSAPP] Backup da sessao pre-Baileys-7 criado em ${PASTA_BACKUP_PRE_V7} ` +
+                '(a migracao de formato do Baileys 7 nao tem volta - guarde esse backup).'
+            );
+        }
+    } catch (erro) {
+        console.error('[WHATSAPP] Falha ao criar backup da sessao antes da migracao:', erro.message);
+    }
+}
 
 let socketAtual = null;
 let conectado = false;
 
 async function iniciarConexao() {
+    fazerBackupSessaoSeNecessario();
+
     const { state, saveCreds } = await useMultiFileAuthState(PASTA_SESSAO);
 
     const socket = makeWASocket({
-        auth: state,
+        auth: {
+            creds: state.creds,
+            // ✅ NOVO: wrapper recomendado oficialmente a partir do Baileys 7
+            // pra cachear o acesso as chaves de sessao (Signal Protocol) em
+            // memoria. Sem isso, leituras/escritas concorrentes no arquivo
+            // de chaves podem se atropelar - um dos fatores que contribuem
+            // pra sessao ficar inconsistente e gerar erros de "Bad MAC" /
+            // "Failed to decrypt message with any known session".
+            keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
+        },
         logger: pino({ level: 'silent' }), // deixa o log do proprio Baileys quieto - usamos os nossos
-        printQRInTerminal: false, // vamos mandar o QR pro Telegram em vez do terminal
     });
 
     socketAtual = socket;
@@ -38,7 +75,7 @@ async function iniciarConexao() {
                 const bufferPng = await QRCode.toBuffer(qr, { width: 400 });
                 await enviarFotoAdmin(
                     bufferPng,
-                    '馃摫 Escaneie este QR code no WhatsApp (Aparelhos conectados) para ativar o bot.'
+                    '📱 Escaneie este QR code no WhatsApp (Aparelhos conectados) para ativar o bot.'
                 );
             } catch (erro) {
                 console.error('[WHATSAPP] Erro ao gerar/enviar QR code:', erro.message);
@@ -49,7 +86,7 @@ async function iniciarConexao() {
             conectado = true;
             console.log('[WHATSAPP] Conectado com sucesso.');
             fila.setFuncaoDeEnvio(enviarMensagemDireta);
-            enviarMensagemAdmin('鉁� Bot do WhatsApp conectado e pronto pra enviar avisos.');
+            enviarMensagemAdmin('✅ Bot do WhatsApp conectado e pronto pra enviar avisos.');
         }
 
         if (connection === 'close') {
@@ -67,7 +104,7 @@ async function iniciarConexao() {
                 setTimeout(() => iniciarConexao(), 5000);
             } else {
                 await enviarMensagemAdmin(
-                    '馃敶 O WhatsApp foi desconectado (logout). Vai ser preciso escanear o QR code de novo - ' +
+                    '🔴 O WhatsApp foi desconectado (logout). Vai ser preciso escanear o QR code de novo - ' +
                     'reinicie o processo do bot na VPS pra gerar um novo QR.'
                 );
             }
@@ -94,7 +131,7 @@ async function resolverJid(telefoneComDDI) {
 
     const jidRetornado = resultado[0].jid;
 
-    // 鉁� CORRIGIDO: o WhatsApp esta migrando pra um sistema de IDs internos
+    // ✅ CORRIGIDO: o WhatsApp esta migrando pra um sistema de IDs internos
     // ocultos (@lid), separados do numero de telefone real (@s.whatsapp.net).
     // Quando onWhatsApp() devolve um JID @lid, o Baileys AINDA manda a
     // mensagem "com sucesso" (por isso o log de entregue) - so que pra um
@@ -134,12 +171,12 @@ async function enviarMensagemDireta(telefoneComDDI, texto) {
 
 // Ponto de entrada usado pelo resto do sistema (cron, rotas da API) -
 // so adiciona na fila, nunca envia direto.
-function enviarMensagem(telefoneComDDI, texto) {
+export function enviarMensagem(telefoneComDDI, texto) {
     fila.adicionar(telefoneComDDI, texto);
 }
 
-function estaConectado() {
+export function estaConectado() {
     return conectado;
 }
 
-module.exports = { iniciarConexao, enviarMensagem, estaConectado };
+export { iniciarConexao };

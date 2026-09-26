@@ -1,7 +1,7 @@
 // Autenticacao simples por chave fixa, enviada pelo app Android no header
 // "x-api-key". E suficiente pro caso de uso (um unico app cliente, admin
 // unico) sem precisar de login/senha/JWT.
-function autenticar(req, res, next) {
+export function autenticar(req, res, next) {
     const chaveEnviada = req.header('x-api-key');
     const chaveEsperada = process.env.API_KEY;
 
@@ -16,5 +16,3 @@ function autenticar(req, res, next) {
 
     next();
 }
-
-module.exports = { autenticar };

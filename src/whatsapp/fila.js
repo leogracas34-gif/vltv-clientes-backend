@@ -1,4 +1,4 @@
-const { enviarMensagemAdmin } = require('../telegram');
+import { enviarMensagemAdmin } from '../telegram/index.js';
 
 // Intervalo entre cada mensagem enviada (em ms). Mandar tudo de uma vez e o
 // principal motivo de numeros nao-oficiais serem marcados como spam - por
@@ -74,4 +74,4 @@ class FilaDeMensagens {
     }
 }
 
-module.exports = new FilaDeMensagens();
+export default new FilaDeMensagens();

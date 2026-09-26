@@ -1,11 +1,10 @@
-require('dotenv').config();
+import 'dotenv/config';
+import express from 'express';
 
-const express = require('express');
-
-const { autenticar } = require('./api/autenticacao');
-const rotas = require('./api/rotas');
-const whatsapp = require('./whatsapp');
-const { enviarMensagemAdmin } = require('./telegram');
+import { autenticar } from './api/autenticacao.js';
+import rotas from './api/rotas.js';
+import * as whatsapp from './whatsapp/index.js';
+import { enviarMensagemAdmin } from './telegram/index.js';
 
 async function iniciar() {
     console.log('=== VLTV Clientes - Bot de WhatsApp ===');

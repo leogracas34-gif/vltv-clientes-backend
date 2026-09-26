@@ -1,7 +1,7 @@
-const express = require('express');
-const router = express.Router();
+import express from 'express';
+import * as whatsapp from '../whatsapp/index.js';
 
-const whatsapp = require('../whatsapp');
+const router = express.Router();
 
 // POST /enviar
 // Body: { "telefone": "5531999998888", "mensagem": "texto..." }
@@ -24,4 +24,4 @@ router.post('/enviar', (req, res) => {
     res.status(202).json({ ok: true, mensagem: 'Enfileirado para envio.' });
 });
 
-module.exports = router;
+export default router;
