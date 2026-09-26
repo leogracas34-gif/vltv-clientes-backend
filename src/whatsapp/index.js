@@ -38,7 +38,7 @@ async function iniciarConexao() {
                 const bufferPng = await QRCode.toBuffer(qr, { width: 400 });
                 await enviarFotoAdmin(
                     bufferPng,
-                    '📱 Escaneie este QR code no WhatsApp (Aparelhos conectados) para ativar o bot.'
+                    '馃摫 Escaneie este QR code no WhatsApp (Aparelhos conectados) para ativar o bot.'
                 );
             } catch (erro) {
                 console.error('[WHATSAPP] Erro ao gerar/enviar QR code:', erro.message);
@@ -49,7 +49,7 @@ async function iniciarConexao() {
             conectado = true;
             console.log('[WHATSAPP] Conectado com sucesso.');
             fila.setFuncaoDeEnvio(enviarMensagemDireta);
-            enviarMensagemAdmin('✅ Bot do WhatsApp conectado e pronto pra enviar avisos.');
+            enviarMensagemAdmin('鉁� Bot do WhatsApp conectado e pronto pra enviar avisos.');
         }
 
         if (connection === 'close') {
@@ -67,7 +67,7 @@ async function iniciarConexao() {
                 setTimeout(() => iniciarConexao(), 5000);
             } else {
                 await enviarMensagemAdmin(
-                    '🔴 O WhatsApp foi desconectado (logout). Vai ser preciso escanear o QR code de novo - ' +
+                    '馃敶 O WhatsApp foi desconectado (logout). Vai ser preciso escanear o QR code de novo - ' +
                     'reinicie o processo do bot na VPS pra gerar um novo QR.'
                 );
             }
@@ -92,9 +92,33 @@ async function resolverJid(telefoneComDDI) {
         );
     }
 
-    // resultado[0].jid ja vem no formato correto que o WhatsApp usa de fato
-    // pra essa conta (com ou sem o "9", dependendo do caso).
-    return resultado[0].jid;
+    const jidRetornado = resultado[0].jid;
+
+    // 鉁� CORRIGIDO: o WhatsApp esta migrando pra um sistema de IDs internos
+    // ocultos (@lid), separados do numero de telefone real (@s.whatsapp.net).
+    // Quando onWhatsApp() devolve um JID @lid, o Baileys AINDA manda a
+    // mensagem "com sucesso" (por isso o log de entregue) - so que pra um
+    // endereco interno que nao e o mesmo da conversa visivel com aquele
+    // contato. Por isso a mensagem nunca aparecia pro cliente, nem do
+    // nosso lado (o item saia da fila como "entregue" e nunca mais era
+    // reenviado).
+    //
+    // Agora so usamos o onWhatsApp() pra CONFIRMAR que o numero existe de
+    // verdade (evita o bug classico do "9" extra em numeros brasileiros) -
+    // mas se ele devolver um ID oculto (@lid), ignoramos e montamos o JID
+    // tradicional a partir do proprio numero, que e o formato que
+    // realmente abre a conversa visivel com o contato.
+    if (jidRetornado.endsWith('@lid')) {
+        const jidTradicional = `${telefoneComDDI}@s.whatsapp.net`;
+        console.warn(
+            `[WHATSAPP] onWhatsApp() devolveu ID oculto (@lid) para ${telefoneComDDI} - ` +
+            `usando o JID tradicional em vez disso: ${jidTradicional}`
+        );
+        return jidTradicional;
+    }
+
+    console.log(`[WHATSAPP] JID resolvido para ${telefoneComDDI}: ${jidRetornado}`);
+    return jidRetornado;
 }
 
 // Funcao "crua" de envio - so e chamada pela fila (fila.js), nunca direto,
