@@ -18,6 +18,16 @@ import fila from './fila.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PASTA_SESSAO = path.join(__dirname, '..', '..', 'auth_info_baileys');
 
+// Imagem do QR Code do Pix (estático, sem valor) - opcional. Se o arquivo
+// nao existir, o bot simplesmente manda a mensagem só em texto, sem quebrar
+// nada. Coloque o arquivo em assets/pix-qrcode.png na raiz do projeto.
+const CAMINHO_QR_PIX = path.join(__dirname, '..', '..', 'assets', 'pix-qrcode.png');
+
+// Código "Pix Copia e Cola" correspondente ao QR acima - configurado via
+// .env (PIX_COPIA_COLA=...) pra poder trocar sem mexer em código. Se vazio,
+// essa parte é simplesmente omitida da mensagem.
+const PIX_COPIA_COLA = (process.env.PIX_COPIA_COLA || '').trim();
+
 // ✅ NOVO (migracao pro Baileys 7): a atualizacao pro Baileys 7 migra as
 // sessoes salvas pro novo formato (LID) de forma IRREVERSIVEL - uma vez
 // que o Baileys 7 abre e regrava a pasta de sessao, nao da mais pra voltar
@@ -180,6 +190,14 @@ async function resolverJid(telefoneComDDI) {
     return jidRetornado;
 }
 
+// Monta o texto final, acrescentando o Pix Copia e Cola (se configurado)
+// pra quem só tem um celular e não consegue escanear o QR na tela do
+// próprio aparelho - nesse caso, copia o texto e cola no app do banco.
+function montarLegenda(textoOriginal) {
+    if (!PIX_COPIA_COLA) return textoOriginal;
+    return `${textoOriginal}\n\n📋 *Pix Copia e Cola* (toque e segure pra copiar):\n${PIX_COPIA_COLA}`;
+}
+
 // Funcao "crua" de envio - so e chamada pela fila (fila.js), nunca direto,
 // pra garantir que sempre passa pelo throttle/retry.
 async function enviarMensagemDireta(telefoneComDDI, texto) {
@@ -188,7 +206,21 @@ async function enviarMensagemDireta(telefoneComDDI, texto) {
     }
 
     const jid = await resolverJid(telefoneComDDI);
-    await socketAtual.sendMessage(jid, { text: texto });
+    const legenda = montarLegenda(texto);
+
+    if (fs.existsSync(CAMINHO_QR_PIX)) {
+        // Manda a imagem do QR Pix com a mensagem inteira como legenda -
+        // fica muito mais profissional que só texto, e ainda cobre quem só
+        // tem 1 celular (via o Copia e Cola dentro da legenda).
+        await socketAtual.sendMessage(jid, {
+            image: { url: CAMINHO_QR_PIX },
+            caption: legenda,
+        });
+    } else {
+        // Sem imagem cadastrada ainda - manda só o texto normalmente, sem
+        // quebrar o envio.
+        await socketAtual.sendMessage(jid, { text: legenda });
+    }
 }
 
 // Ponto de entrada usado pelo resto do sistema (cron, rotas da API) -
