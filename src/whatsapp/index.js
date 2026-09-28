@@ -182,19 +182,31 @@ async function resolverJid(telefoneComDDI) {
 
 // Funcao "crua" de envio - so e chamada pela fila (fila.js), nunca direto,
 // pra garantir que sempre passa pelo throttle/retry.
-async function enviarMensagemDireta(telefoneComDDI, texto) {
+async function enviarMensagemDireta(telefoneComDDI, texto, imagemBase64 = null) {
     if (!socketAtual || !conectado) {
         throw new Error('WhatsApp nao esta conectado no momento.');
     }
 
     const jid = await resolverJid(telefoneComDDI);
-    await socketAtual.sendMessage(jid, { text: texto });
+
+    if (imagemBase64) {
+        // Mensagem com imagem: a legenda (caption) e o proprio texto.
+        // Base64 sem prefixo "data:image/...;base64," - se vier com o
+        // prefixo por engano, remove antes de decodificar.
+        const base64Limpo = imagemBase64.includes(',')
+            ? imagemBase64.substring(imagemBase64.indexOf(',') + 1)
+            : imagemBase64;
+        const bufferImagem = Buffer.from(base64Limpo, 'base64');
+        await socketAtual.sendMessage(jid, { image: bufferImagem, caption: texto });
+    } else {
+        await socketAtual.sendMessage(jid, { text: texto });
+    }
 }
 
 // Ponto de entrada usado pelo resto do sistema (cron, rotas da API) -
 // so adiciona na fila, nunca envia direto.
-export function enviarMensagem(telefoneComDDI, texto) {
-    fila.adicionar(telefoneComDDI, texto);
+export function enviarMensagem(telefoneComDDI, texto, imagemBase64 = null) {
+    fila.adicionar(telefoneComDDI, texto, imagemBase64);
 }
 
 export function estaConectado() {

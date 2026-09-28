@@ -15,7 +15,11 @@ async function iniciar() {
     });
 
     const app = express();
-    app.use(express.json());
+    // ✅ NOVO: limite padrao do express.json() e so 100kb - insuficiente
+    // pra uma imagem em base64 (a tela de Transmissao do app manda fotos
+    // anexadas nesse formato). 12mb da folga confortavel pra fotos ja
+    // redimensionadas pelo app antes de enviar.
+    app.use(express.json({ limit: '12mb' }));
 
     app.get('/saude', (req, res) => {
         res.json({ ok: true, whatsappConectado: whatsapp.estaConectado() });

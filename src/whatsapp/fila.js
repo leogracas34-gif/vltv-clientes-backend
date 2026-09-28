@@ -25,8 +25,9 @@ class FilaDeMensagens {
 
     // telefone: string so numeros, formato "5531999998888"
     // texto: mensagem a ser enviada
-    adicionar(telefone, texto) {
-        this.itens.push({ telefone, texto, tentativas: 0 });
+    // imagemBase64: opcional - string base64 de um JPEG a enviar junto
+    adicionar(telefone, texto, imagemBase64 = null) {
+        this.itens.push({ telefone, texto, imagemBase64, tentativas: 0 });
         console.log(`[FILA] Mensagem adicionada para ${telefone}. Fila com ${this.itens.length} item(ns).`);
         this._processarProximo();
     }
@@ -43,7 +44,7 @@ class FilaDeMensagens {
         const item = this.itens.shift();
 
         try {
-            await this.funcaoDeEnvio(item.telefone, item.texto);
+            await this.funcaoDeEnvio(item.telefone, item.texto, item.imagemBase64);
             console.log(`[FILA] Mensagem entregue com sucesso para ${item.telefone}.`);
         } catch (erro) {
             item.tentativas++;
