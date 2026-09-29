@@ -1,5 +1,6 @@
 import express from 'express';
 import * as whatsapp from '../whatsapp/index.js';
+import { buscarConteudo } from './tmdb.js';
 
 const router = express.Router();
 
@@ -24,6 +25,25 @@ router.post('/enviar', (req, res) => {
     // de um JPEG - repassa como veio, quem decodifica e o whatsapp/index.js.
     whatsapp.enviarMensagem(apenasDigitos, mensagem, imagem || null);
     res.status(202).json({ ok: true, mensagem: 'Enfileirado para envio.' });
+});
+
+// GET /tmdb/buscar?q=nome+do+filme
+// Usado pela tela de Gerador de Banner do app pra achar o pôster oficial
+// de um filme/série. A chave do TMDB fica só no .env do servidor.
+router.get('/tmdb/buscar', async (req, res) => {
+    const termo = req.query.q;
+
+    if (!termo || String(termo).trim().length < 2) {
+        return res.status(400).json({ erro: 'Informe pelo menos 2 caracteres em "q".' });
+    }
+
+    try {
+        const resultados = await buscarConteudo(String(termo).trim());
+        res.json({ ok: true, resultados });
+    } catch (erro) {
+        console.error('[TMDB] Falha na busca:', erro.message);
+        res.status(502).json({ erro: 'Falha ao buscar no TMDB: ' + erro.message });
+    }
 });
 
 export default router;
