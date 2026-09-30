@@ -33,6 +33,7 @@ export async function buscarConteudo(termo) {
             tipo: item.media_type === 'movie' ? 'filme' : 'serie',
             titulo: item.title || item.name,
             ano: (item.release_date || item.first_air_date || '').substring(0, 4),
+            sinopse: item.overview || '',
             thumbUrl: `${TMDB_IMAGE_MINIATURA}${item.poster_path}`,
             posterUrl: `${TMDB_IMAGE_BANNER}${item.poster_path}`,
         }));
